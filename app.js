@@ -73,7 +73,11 @@ function renderRoom(room) {
     ${room.esps.length ? "" : `<p class="empty">Phòng này chưa có ESP nào.<br>Bấm "+ Thêm ESP" để thêm.</p>`}
     ${room.esps.map((e) => `
       <div class="card">
-        <div class="info"><div class="name">${esc(e.name)}</div></div>
+        <div class="info">
+          <div class="name">${esc(e.name)}</div>
+          ${e.online ? "" : `<div class="meta">${e.reason === "battery" ? "🔋 Hết pin, cần sạc/thay pin" : "📡 Mất kết nối"}</div>`}
+          ${!e.online && e.reason !== "battery" ? `<button class="btn-reconnect" data-id="${e.id}">↻ Kết nối lại</button>` : ""}
+        </div>
         <span class="badge ${e.online ? "on" : ""}">${e.online ? "Đang hoạt động" : "Không hoạt động"}</span>
         <button class="del" data-id="${e.id}" aria-label="Xoá ${esc(e.name)}">✕</button>
       </div>`).join("")}
@@ -85,6 +89,17 @@ function renderRoom(room) {
       room.esps.push({ id: makeId(name), name, online: true });
       save(); renderRoom(room);
     }, `ESP${room.esps.length + 1}`);
+  // Nút "Kết nối lại" cho ESP bị mất kết nối
+  $app.querySelectorAll(".btn-reconnect").forEach((b) => b.onclick = () => {
+    b.disabled = true;
+    b.textContent = "Đang kết nối...";
+    // shortcut: giả lập luôn kết nối thành công sau 1.5s; có backend thì gọi API reconnect thật ở đây
+    setTimeout(() => {
+      const esp = room.esps.find((e) => e.id === b.dataset.id);
+      if (esp) { esp.online = true; delete esp.reason; save(); }
+      if (location.hash === `#/room/${room.id}`) renderRoom(room);
+    }, 1500);
+  });
   $app.querySelectorAll(".del").forEach((b) => b.onclick = () => {
     room.esps = room.esps.filter((e) => e.id !== b.dataset.id);
     save(); renderRoom(room);
