@@ -238,11 +238,12 @@ let draft = null;      // thiết bị đang thêm dở
 let camStream = null;  // camera đang mở để quét QR
 
 function renderAdd(roomId) {
-  draft = { roomId: rooms.some((r) => r.id === roomId) ? roomId : rooms[0]?.id, wifi: HUB.wifi };
+  const fromRoom = rooms.some((r) => r.id === roomId);
+  draft = { roomId: fromRoom ? roomId : rooms[0]?.id, fromRoom, wifi: HUB.wifi };
   if (!rooms.length) { topSub("Thêm thiết bị"); $app.innerHTML = `<div class="empty-note">Tạo một phòng trước rồi mới thêm thiết bị nha.</div><button class="add" id="ar">${I.plus} Thêm phòng</button>`; document.getElementById("ar").onclick = addRoom; return; }
   stepMethod();
 }
-const stepBar = (n) => `<div class="steps" aria-label="Bước ${n}/4">${[1, 2, 3, 4].map((i) => `<i class="${i <= n ? "done" : ""}"></i>`).join("")}</div>`;
+const stepBar = (n) => `<div class="steps" aria-label="Bước ${n}/3">${[1, 2, 3].map((i) => `<i class="${i <= n ? "done" : ""}"></i>`).join("")}</div>`;
 const backTo = () => draft.roomId ? `#/room/${draft.roomId}` : "#/";
 
 // Bước 1: chọn cách thêm
@@ -336,74 +337,69 @@ async function stepInfo(info) {
   const owner = rooms.find((r) => r.esps.some((e) => e.sn === info.sn));
   if (owner) return stepManual(`Thiết bị ${info.sn} đã có trong ${owner.name}.`);
   Object.assign(draft, info);
-  topSub("Thông tin thiết bị", backTo());
-  $app.innerHTML = `
-    ${stepBar(2)}
-    <h2 class="step-title">Đã tìm thấy thiết bị</h2>
-    <div class="found">
-      <span class="dev-icon">${I.sensor}</span>
-      <dl><dt>Loại</dt><dd>${esc(info.model)}</dd><dt>Số seri</dt><dd>${esc(info.sn)}</dd></dl>
-    </div>
-    <form class="form" id="f-info" novalidate>
-      <div class="field">
-        <label for="dname">Tên thiết bị</label>
-        <input id="dname" autocomplete="off" enterkeyhint="next" value="Cảm biến ${(rooms.find((r) => r.id === draft.roomId)?.esps.length || 0) + 1}">
-        <span class="hint">Đặt theo vị trí cho dễ nhớ, vd: Cảm biến cửa sổ.</span>
-        <span class="err" id="name-err" role="alert"></span>
-      </div>
-      <div class="field">
-        <label for="droom">Đặt ở phòng</label>
-        <select id="droom">${rooms.map((r) => `<option value="${r.id}" ${r.id === draft.roomId ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select>
-      </div>
-      <button class="solid">Tiếp tục</button>
-    </form>
-  `;
-  document.getElementById("f-info").onsubmit = (ev) => {
-    ev.preventDefault();
-    const name = document.getElementById("dname").value.trim();
-    if (!name) { document.getElementById("name-err").textContent = "Đặt tên cho thiết bị nha."; return; }
-    draft.name = name;
-    draft.roomId = document.getElementById("droom").value;
-    stepWifi();
-  };
+  draft.name ||= `Cảm biến ${(rooms.find((r) => r.id === draft.roomId)?.esps.length || 0) + 1}`;
+  stepSetup();
 }
 
-// Bước 3: WiFi chung với bộ trung tâm
-function stepWifi(error = "") {
-  topSub("Kết nối WiFi", backTo());
+// Bước 2 (1 màn): thông tin thiết bị + tên + mật khẩu WiFi của bộ trung tâm
+// Vào từ 1 phòng thì không hỏi phòng; WiFi mặc định là mạng của bộ trung tâm, chỉ cần nhập mật khẩu
+function stepSetup(error = "", showSsid = draft.wifi !== HUB.wifi) {
+  topSub("Thêm thiết bị", backTo());
   $app.innerHTML = `
-    ${stepBar(3)}
-    <h2 class="step-title">Cho thiết bị vào WiFi</h2>
-    <p class="step-sub">Thiết bị cần dùng <b>chung mạng WiFi</b> với ${esc(HUB.name)} (Raspberry Pi) để gửi và nhận dữ liệu. Chỉ hỗ trợ WiFi 2.4 GHz.</p>
-    <form class="form" id="f-wifi" novalidate>
+    ${stepBar(2)}
+    <div class="found">
+      <span class="dev-icon">${I.sensor}</span>
+      <dl><dt>Loại</dt><dd>${esc(draft.model)}</dd><dt>Số seri</dt><dd>${esc(draft.sn)}</dd></dl>
+    </div>
+    <form class="form" id="f-setup" novalidate>
       <div class="field">
-        <label for="ssid">Tên WiFi</label>
-        <input id="ssid" autocomplete="off" enterkeyhint="next" value="${esc(draft.wifi)}">
-        <span class="hint">Bộ trung tâm đang dùng mạng "${esc(HUB.wifi)}".</span>
+        <label for="dname">Tên thiết bị</label>
+        <input id="dname" autocomplete="off" enterkeyhint="next" value="${esc(draft.name)}">
+        <span class="err" id="name-err" role="alert"></span>
       </div>
+      ${draft.fromRoom ? "" : `<div class="field">
+        <label for="droom">Đặt ở phòng</label>
+        <select id="droom">${rooms.map((r) => `<option value="${r.id}" ${r.id === draft.roomId ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select>
+      </div>`}
       <div class="field">
-        <label for="pass">Mật khẩu WiFi</label>
-        <div class="pass-wrap"><input id="pass" type="password" autocomplete="off" enterkeyhint="go"><button type="button" id="peek">Hiện</button></div>
+        <label for="pass">${showSsid ? "Mật khẩu WiFi" : `Mật khẩu WiFi "${esc(draft.wifi)}"`}</label>
+        <div class="pass-wrap"><input id="pass" type="password" autocomplete="off" enterkeyhint="go" autofocus><button type="button" id="peek">Hiện</button></div>
+        <span class="hint">Thiết bị sẽ vào chung WiFi với ${esc(HUB.name)} để gửi và nhận dữ liệu (chỉ WiFi 2.4 GHz).</span>
         <span class="err" id="wifi-err" role="alert">${esc(error)}</span>
       </div>
+      ${showSsid ? `<div class="field">
+        <label for="ssid">Tên WiFi</label>
+        <input id="ssid" autocomplete="off" value="${esc(draft.wifi)}">
+        <span class="hint">Bộ trung tâm đang dùng mạng "${esc(HUB.wifi)}".</span>
+      </div>` : `<button type="button" class="linkish" id="other-net">Dùng mạng WiFi khác</button>`}
       <button class="solid">Kết nối</button>
     </form>
   `;
   const pass = document.getElementById("pass");
+  const keep = () => { // giữ lại những gì đã nhập khi vẽ lại màn
+    draft.name = document.getElementById("dname").value;
+    const room = document.getElementById("droom"); if (room) draft.roomId = room.value;
+  };
+  document.getElementById("other-net")?.addEventListener("click", () => { keep(); stepSetup("", true); });
   document.getElementById("peek").onclick = (ev) => {
     pass.type = pass.type === "password" ? "text" : "password";
     ev.target.textContent = pass.type === "password" ? "Hiện" : "Ẩn";
   };
-  document.getElementById("f-wifi").onsubmit = (ev) => {
+  document.getElementById("f-setup").onsubmit = (ev) => {
     ev.preventDefault();
-    const ssid = document.getElementById("ssid").value.trim();
-    const err = document.getElementById("wifi-err");
+    keep();
+    const nameErr = document.getElementById("name-err"), err = document.getElementById("wifi-err");
+    nameErr.textContent = err.textContent = "";
+    draft.name = draft.name.trim();
+    if (!draft.name) return nameErr.textContent = "Đặt tên cho thiết bị nha.";
+    const ssid = document.getElementById("ssid")?.value.trim() ?? draft.wifi;
     if (!ssid) return err.textContent = "Nhập tên WiFi.";
     if (pass.value.length < 8) return err.textContent = "Mật khẩu WiFi phải có ít nhất 8 ký tự.";
     draft.wifi = ssid;
     stepConnect(pass.value);
   };
 }
+const stepWifi = () => stepSetup("", true); // nút "Đổi WiFi" khi kết nối lỗi
 
 // Bước 4: tiến trình kết nối (giả lập từng bước; có backend thì thay mỗi sleep bằng lệnh gọi thật)
 async function stepConnect(password) {
@@ -415,7 +411,7 @@ async function stepConnect(password) {
     "Thử gửi và nhận dữ liệu",
   ];
   $app.innerHTML = `
-    ${stepBar(4)}
+    ${stepBar(3)}
     <h2 class="step-title">Đang kết nối thiết bị</h2>
     <p class="step-sub">Để thiết bị gần bộ phát WiFi và đừng tắt trang này.</p>
     <ol class="progress-list">${steps.map((s, i) => `<li id="ps${i}"><span class="mark">${i + 1}</span>${esc(s)}</li>`).join("")}</ol>
