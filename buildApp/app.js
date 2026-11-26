@@ -256,10 +256,11 @@ async function stepScan() {
     <button class="linkish" id="to-manual">Không quét được? Nhập mã thủ công</button>
   `;
   document.getElementById("to-manual").onclick = () => { stopCamera(); stepManual(); };
-  const msg = (t) => { const m = document.getElementById("cam-msg"); if (m) { m.hidden = false; m.textContent = t; } };
-  if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
-    return msg("Trình duyệt này chưa hỗ trợ quét QR. Bấm \"Nhập mã thủ công\" bên dưới nha.");
-  }
+  const msg = (t) => {
+    const m = document.getElementById("cam-msg"); if (!m) return;
+    $app.querySelectorAll(".scanner .frame, .scanner .laser").forEach((el) => el.hidden = true);
+    m.hidden = false; m.textContent = t;
+  };
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     const video = document.getElementById("cam");
