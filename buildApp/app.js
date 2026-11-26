@@ -14,6 +14,14 @@ const EVENTS_KEY = "csi-web-events";
 // Lấy dữ liệu: ưu tiên bản đã lưu, không có thì dùng dữ liệu mẫu trong data.js
 let rooms = load(STORAGE_KEY, MOCK_ROOMS);
 let events = load(EVENTS_KEY, MOCK_EVENTS);
+/* Thiết bị thêm từ bản cũ (tên "ESP1", chưa có số seri/WiFi): đổi tên và bổ sung cho đồng nhất */
+for (const r of rooms) for (const e of r.esps) {
+  e.name = e.name.replace(/^ESP\s*(\d+)$/i, "Cảm biến $1");
+  e.sn ||= "CS" + Math.random().toString(16).slice(2, 8).toUpperCase();
+  e.model ||= "Cảm biến CSI S1";
+  e.wifi ||= HUB.wifi;
+}
+save(); // lưu lại để số seri không đổi mỗi lần tải trang
 function load(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) || structuredClone(fallback); }
   catch { return structuredClone(fallback); }
@@ -183,7 +191,7 @@ function renderRoom(room) {
         <div class="info">
           <div class="name">${esc(e.name)}</div>
           <div class="status ${e.online ? "on" : e.reason === "battery" ? "bad" : ""}">${e.online ? "Đang hoạt động" : e.reason === "battery" ? "Hết pin, cần sạc hoặc thay pin" : "Mất kết nối"}</div>
-          ${e.sn ? `<div class="meta">SN ${esc(e.sn)}${e.wifi ? `, WiFi ${esc(e.wifi)}` : ""}</div>` : ""}
+          <div class="meta">SN ${esc(e.sn)}, WiFi ${esc(e.wifi)}</div>
           ${!e.online && e.reason !== "battery" ? `<button class="btn-reconnect" data-id="${e.id}">Kết nối lại</button>` : ""}
         </div>
         <button class="del" data-id="${e.id}" aria-label="Xoá ${esc(e.name)}">${I.x}</button>
@@ -256,11 +264,11 @@ async function stepScan() {
     <button class="linkish" id="to-manual">Không quét được? Nhập mã thủ công</button>
   `;
   document.getElementById("to-manual").onclick = () => { stopCamera(); stepManual(); };
-  const msg = (t) => {
-    const m = document.getElementById("cam-msg"); if (!m) return;
-    $app.querySelectorAll(".scanner .frame, .scanner .laser").forEach((el) => el.hidden = true);
-    m.hidden = false; m.textContent = t;
-  };
+  // Báo lỗi ngắn ở đáy khung, khung xanh + vạch quét vẫn chạy
+  const msg = (t) => { const m = document.getElementById("cam-msg"); if (m) { m.hidden = false; m.textContent = t; } };
+  if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
+    return msg("Trình duyệt chưa hỗ trợ quét QR");
+  }
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     const video = document.getElementById("cam");
@@ -278,7 +286,7 @@ async function stepScan() {
       await sleep(300);
     }
   } catch {
-    msg("Không mở được camera. Hãy cho phép camera trong trình duyệt, hoặc nhập mã thủ công.");
+    msg("Chưa mở được camera");
   }
 }
 function stopCamera() { camStream?.getTracks().forEach((t) => t.stop()); camStream = null; }
