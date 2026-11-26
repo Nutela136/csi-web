@@ -14,6 +14,11 @@ const EVENTS_KEY = "csi-web-events";
 // Lấy dữ liệu: ưu tiên bản đã lưu, không có thì dùng dữ liệu mẫu trong data.js
 let rooms = load(STORAGE_KEY, MOCK_ROOMS);
 let events = load(EVENTS_KEY, MOCK_EVENTS);
+// Dữ liệu lưu bị sai cấu trúc (sửa tay, bản cũ...) -> vá cho đủ trường, tránh trắng trang
+if (!Array.isArray(rooms)) rooms = structuredClone(MOCK_ROOMS);
+rooms = rooms.filter((r) => r && r.id && r.name);
+for (const r of rooms) if (!Array.isArray(r.esps)) r.esps = [];
+if (!Array.isArray(events)) events = [];
 /* Thiết bị thêm từ bản cũ (tên "ESP1", chưa có số seri/WiFi): đổi tên và bổ sung cho đồng nhất */
 for (const r of rooms) for (const e of r.esps) {
   e.name = e.name.replace(/^ESP\s*(\d+)$/i, "Cảm biến $1");
@@ -36,9 +41,20 @@ function save() {
 function logEvent(roomId, text) {
   const now = new Date();
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  events.unshift({ time, room: roomId, text });
+  events.unshift({ time, ts: now.getTime(), room: roomId, text }); // ts = mốc thời gian đầy đủ để hiện ngày
   events = events.slice(0, 50);
   save();
+}
+
+// Hiện giờ kèm ngày: "Hôm nay 07:39", "Hôm qua 22:05", hoặc "24/11 07:39"
+// (sự kiện mẫu không có ts thì coi như hôm nay)
+function when(e) {
+  if (!e.ts) return `Hôm nay ${e.time}`;
+  const d = new Date(e.ts), day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(d)) / 864e5);
+  const p = (n) => String(n).padStart(2, "0");
+  const t = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  return diff === 0 ? `Hôm nay ${t}` : diff === 1 ? `Hôm qua ${t}` : `${p(d.getDate())}/${p(d.getMonth() + 1)} ${t}`;
 }
 
 const $app = document.getElementById("app");
@@ -49,6 +65,8 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(
 const makeId = (name) =>
   name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d")
       .toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + Math.random().toString(36).slice(2, 6);
+// Sắp xếp theo tên, hiểu số: "Cảm biến 2" đứng trước "Cảm biến 10"
+const byName = (x, y) => x.name.localeCompare(y.name, "vi", { numeric: true });
 const onlineCount = (r) => r.esps.filter((e) => e.online).length;
 const roomName = (id) => rooms.find((r) => r.id === id)?.name || "Phòng đã xoá";
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -123,7 +141,7 @@ function renderHome() {
 
     ${last ? `<button class="event-row" id="ev-all">
       <span class="er-icon">${I.bell}</span>
-      <span class="er-text"><b class="${/có người/i.test(last.text) ? "hot" : ""}">${esc(last.text)}</b><small>${esc(roomName(last.room))}, lúc ${esc(last.time)}</small></span>
+      <span class="er-text"><b class="${/có người/i.test(last.text) ? "hot" : ""}">${esc(last.text)}</b><small>${esc(roomName(last.room))}, ${esc(when(last).toLowerCase())}</small></span>
       <span class="er-more">Tất cả ${I.chev}</span>
     </button>` : ""}
 
@@ -138,7 +156,7 @@ function renderHome() {
 function eventList(list) {
   if (!list.length) return `<p class="step-sub" style="padding:0 20px 16px">Chưa có sự kiện nào.</p>`;
   return `<ul class="events">${list.map((e) => `
-    <li><time>${esc(e.time)}</time>
+    <li><time>${esc(when(e))}</time>
       <span class="ev-text"><span class="${/có người/i.test(e.text) ? "hot" : ""}">${esc(e.text)}</span><br><span class="ev-room">${esc(roomName(e.room))}</span></span></li>`).join("")}</ul>`;
 }
 
@@ -161,7 +179,7 @@ function roomCard(r) {
         ${r.training ? `<span class="chip">Đang train</span>` : ""}
       </span>
       ${empty ? `<span class="s-empty">Thêm thiết bị để bắt đầu theo dõi phòng này</span>`
-        : last ? `<span class="s-time">Cập nhật ${esc(last.time)}</span>` : ""}
+        : last ? `<span class="s-time">Cập nhật ${esc(when(last).toLowerCase())}</span>` : ""}
     </button>
     <div class="actions two">
       <button data-go="#/add/${r.id}">${I.plus}Thêm thiết bị</button>
@@ -190,7 +208,7 @@ function renderRoom(room) {
     ${room.esps.length - onlineCount(room) ? `<p class="banner">${room.esps.length - onlineCount(room)} thiết bị cần xử lý, xem bên dưới.</p>` : ""}
 
     <h2 class="group-title">Thiết bị trong phòng</h2>
-    ${room.esps.length ? `<ul class="list">${room.esps.map((e) => `
+    ${room.esps.length ? `<ul class="list">${[...room.esps].sort(byName).map((e) => `
       <li class="dev">
         <span class="dev-icon ${e.online ? "on" : ""}">${I.sensor}<span class="dot"></span></span>
         <div class="info">
@@ -204,9 +222,27 @@ function renderRoom(room) {
       : `<div class="empty-note">Phòng này chưa có thiết bị. Thêm thiết bị để bắt đầu theo dõi.</div>`}
     <button class="add" id="add-dev">${I.plus} Thêm thiết bị</button>
 
+    <h2 class="group-title">Cài đặt phòng</h2>
+    <div class="list settings">
+      <button class="set-row" id="rename-room">Đổi tên phòng ${I.chev}</button>
+      <button class="set-row danger" id="delete-room">Xoá phòng ${I.chev}</button>
+    </div>
+
     <div class="dock"><button class="solid" id="go-train">${room.training ? "Xem tiến độ train" : "Train"}</button></div>
   `;
   document.getElementById("go-train").onclick = () => go(`#/room/${room.id}/train`);
+  document.getElementById("rename-room").onclick = () =>
+    ask("Đổi tên phòng", "Tên mới", (name) => {
+      logEvent(room.id, `Đổi tên "${room.name}" thành "${name}"`);
+      room.name = name; save(); renderRoom(room);
+    }, room.name, "Lưu");
+  document.getElementById("delete-room").onclick = () =>
+    confirmBox(`Xoá ${room.name}?`, room.esps.length ? `${room.esps.length} thiết bị trong phòng và lịch sử train cũng bị xoá theo.` : "Phòng sẽ bị xoá khỏi danh sách.", "Xoá phòng", () => {
+      clearInterval(trainTimers[room.id]);
+      rooms = rooms.filter((r) => r !== room);
+      logEvent(room.id, `Đã xoá phòng ${room.name}`);
+      go("#/");
+    });
   document.getElementById("add-dev").onclick = () => go(`#/add/${room.id}`);
   $app.querySelectorAll(".btn-reconnect").forEach((b) => b.onclick = () => {
     b.disabled = true;
@@ -220,10 +256,12 @@ function renderRoom(room) {
   });
   $app.querySelectorAll(".del").forEach((b) => b.onclick = () => {
     const dev = room.esps.find((e) => e.id === b.dataset.id);
-    if (!dev || !confirm(`Xoá "${dev.name}" khỏi ${room.name}?`)) return;
-    room.esps = room.esps.filter((e) => e !== dev);
-    logEvent(room.id, `Đã gỡ ${dev.name}`);
-    renderRoom(room);
+    if (!dev) return;
+    confirmBox(`Xoá "${dev.name}"?`, `Thiết bị sẽ bị gỡ khỏi ${room.name}. Muốn dùng lại phải thêm lại từ đầu.`, "Xoá thiết bị", () => {
+      room.esps = room.esps.filter((e) => e !== dev);
+      logEvent(room.id, `Đã gỡ ${dev.name}`);
+      renderRoom(room);
+    });
   });
 }
 
@@ -260,7 +298,32 @@ function stepMethod() {
   document.getElementById("m-manual").onclick = () => stepManual();
 }
 
-// Bước 1a: quét QR bằng camera (BarcodeDetector có trên Chrome Android; iPhone chưa hỗ trợ -> nhập tay)
+// Bước 1a: quét QR bằng camera.
+// Chrome Android có sẵn BarcodeDetector; trình duyệt khác (iPhone, máy tính) dùng thư viện jsQR tải khi cần.
+// Lưu ý: camera chỉ mở được trên https (GitHub Pages ok) hoặc localhost.
+let jsQRLoad = null;
+function loadJsQR() {
+  return jsQRLoad ||= new Promise((ok, fail) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
+    s.onload = () => ok(window.jsQR); s.onerror = () => { jsQRLoad = null; fail(); };
+    document.head.append(s);
+  });
+}
+async function makeDetector(video) {
+  if ("BarcodeDetector" in window) {
+    const d = new BarcodeDetector({ formats: ["qr_code"] });
+    return async () => (await d.detect(video).catch(() => []))[0]?.rawValue;
+  }
+  const jsQR = await loadJsQR();
+  const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
+  return async () => {
+    if (!video.videoWidth) return null;
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    return jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height)?.data;
+  };
+}
 async function stepScan() {
   topSub("Quét mã QR", backTo());
   $app.innerHTML = `
@@ -272,27 +335,24 @@ async function stepScan() {
   document.getElementById("to-manual").onclick = () => { stopCamera(); stepManual(); };
   // Báo lỗi ngắn ở đáy khung, khung xanh + vạch quét vẫn chạy
   const msg = (t) => { const m = document.getElementById("cam-msg"); if (m) { m.hidden = false; m.textContent = t; } };
-  if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
-    return msg("Trình duyệt chưa hỗ trợ quét QR");
-  }
+  if (!navigator.mediaDevices?.getUserMedia) return msg("Trình duyệt chưa hỗ trợ camera");
+  const video = document.getElementById("cam");
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    const video = document.getElementById("cam");
-    if (!video) return stopCamera();
+    if (!document.getElementById("cam")) return stopCamera(); // đã rời màn hình
     video.srcObject = camStream; await video.play();
-    const detector = new BarcodeDetector({ formats: ["qr_code"] });
-    while (camStream) {
-      const codes = await detector.detect(video).catch(() => []);
-      if (codes.length) {
-        const info = parseCode(codes[0].rawValue);
-        stopCamera();
-        if (info) return stepInfo(info);
-        return stepManual("Mã QR này không phải của thiết bị CSI.");
-      }
-      await sleep(300);
+  } catch { return msg("Chưa mở được camera"); }
+  let detect;
+  try { detect = await makeDetector(video); } catch { stopCamera(); return msg("Không tải được bộ quét QR"); }
+  while (camStream) {
+    const raw = await detect();
+    if (raw) {
+      const info = parseCode(raw);
+      stopCamera();
+      if (info) return stepInfo(info);
+      return stepManual("Mã QR này không phải của thiết bị CSI.");
     }
-  } catch {
-    msg("Chưa mở được camera");
+    await sleep(250);
   }
 }
 function stopCamera() { camStream?.getTracks().forEach((t) => t.stop()); camStream = null; }
@@ -337,7 +397,10 @@ async function stepInfo(info) {
   const owner = rooms.find((r) => r.esps.some((e) => e.sn === info.sn));
   if (owner) return stepManual(`Thiết bị ${info.sn} đã có trong ${owner.name}.`);
   Object.assign(draft, info);
-  draft.name ||= `Cảm biến ${(rooms.find((r) => r.id === draft.roomId)?.esps.length || 0) + 1}`;
+  // Tên gợi ý: số nhỏ nhất chưa dùng trong phòng (xoá "Cảm biến 2" thì lần sau gợi ý lại "Cảm biến 2")
+  const used = new Set((rooms.find((r) => r.id === draft.roomId)?.esps || []).map((e) => e.name));
+  let n = 1; while (used.has(`Cảm biến ${n}`)) n++;
+  draft.name ||= `Cảm biến ${n}`;
   stepSetup();
 }
 
@@ -532,12 +595,31 @@ function openMenu() {
   m.onclose = () => { if (m.returnValue === "device") go("#/add"); if (m.returnValue === "room") addRoom(); };
   m.returnValue = ""; m.showModal();
 }
-function ask(title, placeholder, onOk, value = "") {
+function ask(title, placeholder, onOk, value = "", okText = "Thêm") {
   const dlg = document.getElementById("dlg"), input = document.getElementById("dlg-input");
   document.getElementById("dlg-title").textContent = title;
+  dlg.querySelector(".solid").textContent = okText;
   input.placeholder = placeholder; input.value = value;
   dlg.onclose = () => { if (dlg.returnValue === "ok" && input.value.trim()) onOk(input.value.trim()); };
   dlg.showModal(); input.select();
+}
+
+/* Hộp xác nhận theo tông app (thay cho confirm() mặc định của trình duyệt).
+   Tạo bằng JS nên không cần sửa index.html. */
+function confirmBox(title, text, okText, onOk) {
+  let d = document.getElementById("cfm");
+  if (!d) {
+    d = document.createElement("dialog"); d.id = "cfm";
+    d.innerHTML = `<form method="dialog"><h2></h2><p class="cfm-text"></p><div class="row"><button value="cancel" class="ghost">Huỷ</button><button value="ok" class="solid danger"></button></div></form>`;
+    document.body.append(d);
+  }
+  d.querySelector("h2").textContent = title;
+  d.querySelector(".cfm-text").textContent = text;
+  d.querySelector(".solid").textContent = okText;
+  d.returnValue = "";
+  d.onclose = () => { if (d.returnValue === "ok") onOk(); };
+  d.showModal();
+  d.querySelector(".ghost").focus(); // mặc định chọn Huỷ, tránh xoá nhầm khi bấm Enter
 }
 
 /* Tự kiểm tra nhỏ cho bộ đọc mã (xem trong Console F12 nếu sai) */
