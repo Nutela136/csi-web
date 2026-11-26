@@ -334,3 +334,22 @@ dialog.sheet form { display: grid; gap: 8px; }
   main, .topbar { max-width: 1080px; }
   .room-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* Sửa sau đợt test: tên dài không làm tràn màn hình, vùng chạm đủ 44px */
+main > *, .room-grid > * { min-width: 0; }
+.er-text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screen .s-head { right: 18px; }
+.screen .s-head .s-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screen:has(.s-icons .chip) .s-head { right: 190px; }
+.icon-btn { width: 44px; height: 44px; }
+.btn-reconnect { min-height: 44px; padding: 8px 16px; }
+
+/* Cài đặt phòng + hộp xác nhận */
+.settings .set-row { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 52px; padding: 14px 16px; border: 0; background: none; text-align: left; font-weight: 700; color: var(--ink); }
+.settings .set-row + .set-row { border-top: 1px solid var(--line); }
+.settings .set-row svg { color: var(--muted); }
+.settings .set-row:active { background: var(--card-2); }
+.settings .set-row.danger { color: var(--danger); }
+.solid.danger { background: var(--danger); color: #fff; }
+.cfm-text { color: var(--muted); }
+@media (hover: hover) and (pointer: fine) { .settings .set-row:hover { background: var(--card-2); } }
