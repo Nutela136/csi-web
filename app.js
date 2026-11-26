@@ -444,37 +444,77 @@ async function stepConnect(password) {
   document.getElementById("done").onclick = () => go(`#/room/${room.id}`);
 }
 
-/* ---------- Train ---------- */
-let trainTimer = null;
+/* ---------- Train ----------
+   - Chưa chạy: chỉ có nút "Bắt đầu train" + khung "Lịch sử train" bên dưới
+   - Đang chạy: hiện vòng tiến độ, ẩn nút bắt đầu (tránh bấm chồng lên lần đang chạy)
+   - Xong: báo Thành công / Không thành công và ghi vào lịch sử
+   Lịch sử lưu ở room.trainLog: { start, end, ok, note } */
+const stamp = () => {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())} ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
+};
+const trainTimers = {}; // mỗi phòng 1 bộ đếm, chạy tiếp cả khi rời màn hình
+
+function startTrain(room) {
+  room.training = true; room.progress = 0; room.lastResult = null;
+  room.trainStart = stamp();
+  logEvent(room.id, "Bắt đầu train");
+  tickTrain(room);
+}
+// Giả lập: mỗi giây +5%. Sau này thay bằng gọi API train thật trên Pi.
+function tickTrain(room) {
+  clearInterval(trainTimers[room.id]);
+  trainTimers[room.id] = setInterval(() => {
+    room.progress = Math.min(100, (room.progress || 0) + 5);
+    // shortcut: giả lập thất bại khi giữa chừng không còn thiết bị nào hoạt động
+    const ok = onlineCount(room) > 0;
+    if (room.progress >= 100 || !ok) finishTrain(room, ok);
+    save();
+    if (location.hash === `#/room/${room.id}/train`) renderTrain(room);
+  }, 1000);
+}
+function finishTrain(room, ok) {
+  clearInterval(trainTimers[room.id]);
+  room.training = false;
+  const note = ok ? `${onlineCount(room)} thiết bị đã lấy dữ liệu` : "Không có thiết bị nào hoạt động";
+  room.lastResult = { ok, note };
+  (room.trainLog ||= []).unshift({ start: room.trainStart, end: stamp(), ok, note });
+  logEvent(room.id, ok ? "Train thành công" : "Train không thành công");
+}
+
 function renderTrain(room) {
   topSub(`Train ${room.name}`, `#/room/${room.id}`);
-  const on = room.training, progress = room.progress || 0;
+  const on = room.training, progress = room.progress || 0, res = room.lastResult;
   const C = 2 * Math.PI * 80;
+  const canStart = onlineCount(room) > 0;
+  const log = room.trainLog || [];
   $app.innerHTML = `
+    ${on ? `
     <section class="train">
-      <div class="ring ${on ? "" : "idle"}">
+      <div class="ring">
         <svg viewBox="0 0 180 180" aria-hidden="true"><circle class="track" cx="90" cy="90" r="80"/><circle class="bar" cx="90" cy="90" r="80" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - progress / 100)}"/></svg>
-        <div class="pct">${on ? `${progress}%` : "Chưa chạy"}</div>
+        <div class="pct">${progress}%</div>
       </div>
-      <p class="big ${on ? "on" : ""}">${on ? "Đang train" : "Không train"}</p>
-      <p class="sub">${on ? `${onlineCount(room)} thiết bị đang lấy dữ liệu sóng trong phòng`
-        : room.esps.length ? "Bấm Bắt đầu train để các thiết bị lấy dữ liệu và train" : "Phòng chưa có thiết bị, thêm thiết bị trước nha"}</p>
+      <p class="big on">Đang train</p>
+      <p class="sub">${onlineCount(room)} thiết bị đang lấy dữ liệu sóng trong phòng. Bắt đầu lúc ${esc(room.trainStart)}.</p>
+    </section>` : `
+    ${res ? `<section class="result ${res.ok ? "" : "fail"}">
+      <span class="big-check">${res.ok ? "✓" : "!"}</span>
+      <h2 class="step-title">${res.ok ? "Train thành công" : "Train không thành công"}</h2>
+      <p>${esc(res.note)}</p>
+    </section>` : ""}
+    <button class="solid wide" id="start" ${canStart ? "" : "disabled"}>Bắt đầu train</button>
+    ${canStart ? "" : `<p class="step-sub">Cần ít nhất 1 thiết bị đang hoạt động trong phòng.</p>`}`}
+
+    <section class="panel">
+      <h2 class="panel-head as-title">Lịch sử train</h2>
+      ${log.length ? `<ul class="events">${log.map((t) => `
+        <li><span class="ev-text"><span class="${t.ok ? "ok" : "bad"}">${t.ok ? "Thành công" : "Không thành công"}</span><br>
+          <span class="ev-room">${esc(t.start)} đến ${esc(t.end)}, ${esc(t.note)}</span></span></li>`).join("")}</ul>`
+        : `<p class="step-sub" style="padding:0 20px 18px">Chưa train lần nào.</p>`}
     </section>
-    <div class="dock"><button class="solid" id="toggle" ${room.esps.length ? "" : "disabled"}>${on ? "Dừng train" : "Bắt đầu train"}</button></div>
   `;
-  document.getElementById("toggle").onclick = () => {
-    room.training = !room.training; room.progress = 0;
-    logEvent(room.id, room.training ? "Bắt đầu train" : "Dừng train");
-    renderTrain(room);
-  };
-  // Giả lập: mỗi giây +5%, đủ 100% thì tự dừng. Sau này thay bằng gọi API thật.
-  clearInterval(trainTimer);
-  if (on) trainTimer = setInterval(() => {
-    room.progress = Math.min(100, (room.progress || 0) + 5);
-    if (room.progress >= 100) { room.training = false; logEvent(room.id, "Train xong"); clearInterval(trainTimer); }
-    save();
-    if (location.hash.endsWith(`${room.id}/train`)) renderTrain(room);
-  }, 1000);
+  document.getElementById("start")?.addEventListener("click", () => { startTrain(room); renderTrain(room); });
 }
 
 /* ---------- Thêm phòng, menu nút + ---------- */
@@ -503,4 +543,6 @@ function ask(title, placeholder, onOk, value = "") {
 console.assert(parseCode("CSI|SN=cs7f21b9|MODEL=Cảm biến CSI S1")?.sn === "CS7F21B9", "parseCode QR");
 console.assert(parseCode("abc") === null, "parseCode sai mã");
 
+// Phòng đang train dở khi tải lại trang -> chạy tiếp
+rooms.filter((r) => r.training).forEach(tickTrain);
 router();
