@@ -1,20 +1,34 @@
 /* ==========================================================
-   DỮ LIỆU MẪU (mock data)
-   Sửa thoải mái ở đây: thêm/xoá phòng, đổi tên, đổi ESP.
-   - occupied: true = có người, false = không có người
-   - online:   true = ESP đang hoạt động, false = không hoạt động
-   - reason:   lý do không hoạt động: "disconnect" = mất kết nối (bấm Kết nối lại được),
-               "battery" = hết pin (phải thay/sạc pin, không có nút kết nối lại)
-   - training: true = phòng đang train
-   Sau này có backend thì thay phần này bằng dữ liệu lấy từ API.
+   DỮ LIỆU MẪU (mock data) — sửa thoải mái ở đây.
+   Sau này có backend (Raspberry Pi) thì thay bằng dữ liệu lấy từ API.
    ========================================================== */
+
+/* Bộ trung tâm (Raspberry Pi). Thiết bị cảm biến phải vào CHUNG mạng WiFi
+   này thì mới gửi/nhận dữ liệu với Pi được. */
+const HUB = {
+  name: "Bộ trung tâm CSI",
+  wifi: "CSI-Home",          // tên WiFi mà Pi đang dùng (gợi ý sẵn khi thêm thiết bị)
+  ip: "192.168.1.10"
+};
+
+/* Mã QR dán trên mỗi thiết bị có dạng:
+     CSI|SN=CS1A2B3C|MODEL=Cảm biến CSI S1
+   Hoặc chỉ là số seri, vd: CS1A2B3C
+   Số seri (SN) = "CS" + ít nhất 4 chữ/số. */
+
+/* Phòng:
+   - occupied: true = có người, false = không có người
+   - esps: danh sách thiết bị cảm biến (giữ tên "esps" cho khớp dữ liệu cũ đã lưu)
+       online: true = đang hoạt động
+       reason: "disconnect" = mất kết nối (có nút Kết nối lại), "battery" = hết pin
+   - training: true = đang train */
 const MOCK_ROOMS = [
   {
     id: "phong-khach",
     name: "Phòng khách",
     occupied: false,
     training: false,
-    esps: [] // chưa có ESP nào, giống bản phác thảo
+    esps: []
   },
   {
     id: "phong-ngu",
@@ -22,10 +36,16 @@ const MOCK_ROOMS = [
     occupied: true,
     training: false,
     esps: [
-      { id: "esp1", name: "ESP1", online: true },
-      { id: "esp2", name: "ESP2", online: false, reason: "disconnect" },
-      { id: "esp3", name: "ESP3", online: false, reason: "battery" }
+      { id: "d1", name: "Cảm biến cửa sổ", sn: "CS7F21A0", model: "Cảm biến CSI S1", wifi: "CSI-Home", online: true },
+      { id: "d2", name: "Cảm biến đầu giường", sn: "CS7F21A1", model: "Cảm biến CSI S1", wifi: "CSI-Home", online: false, reason: "disconnect" },
+      { id: "d3", name: "Cảm biến góc tủ", sn: "CS7F21A2", model: "Cảm biến CSI S1", wifi: "CSI-Home", online: false, reason: "battery" }
     ]
   }
 ];
- 
+
+/* Sự kiện mẫu hiện ở mục "Sự kiện gần đây" (time = giờ:phút) */
+const MOCK_EVENTS = [
+  { time: "07:39", room: "phong-ngu", text: "Phát hiện có người" },
+  { time: "06:12", room: "phong-khach", text: "Phòng trống" },
+  { time: "22:05", room: "phong-ngu", text: "Cảm biến góc tủ hết pin" }
+];
