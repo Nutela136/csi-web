@@ -218,7 +218,7 @@ main { max-width: 600px; margin: 0 auto; padding: 4px 16px calc(32px + env(safe-
 }
 .scanner .laser { position: absolute; left: 20%; right: 20%; top: 20%; height: 2px; background: var(--action); box-shadow: 0 0 10px var(--action); animation: laser 2s ease-in-out infinite alternate; }
 @keyframes laser { to { top: 80%; } }
-.scanner .msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+.scanner .msg { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center; font-size: .9rem; font-weight: 700; color: var(--muted); }
 .linkish { border: 0; background: none; color: var(--action); font-weight: 700; padding: 8px; justify-self: center; }
 
 /* Thẻ thông tin thiết bị tìm thấy */
