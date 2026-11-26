@@ -287,3 +287,50 @@ dialog.sheet form { display: grid; gap: 8px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+
+/* ===== BẢN XEM TRƯỚC: các chỉnh sửa sau khi đánh giá UI/UX ===== */
+/* Trạng thái cả nhà: 1 câu to thay cho 3 ô số */
+.status-hero { padding: 4px 4px 2px; }
+.sh-big { font: 700 1.55rem/1.2 var(--f-display); letter-spacing: -.02em; }
+.sh-big.on { color: var(--presence); }
+.sh-sub { margin-top: 6px; color: var(--muted); }
+.sh-sub .warn, .banner { color: #ffb4a8; }
+
+/* Sự kiện mới nhất: 1 dòng gọn như Imou */
+.event-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; border: 0; border-radius: var(--r-lg); background: var(--card); text-align: left; }
+.event-row:active { background: var(--card-2); }
+.er-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--card-2); color: var(--muted); }
+.er-text { flex: 1; min-width: 0; }
+.er-text b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.er-text b.hot { color: var(--presence); }
+.er-text small { color: var(--muted); }
+.er-more { display: flex; align-items: center; color: var(--muted); font-size: .85rem; font-weight: 700; white-space: nowrap; }
+
+/* Thẻ phòng: tên + trạng thái ở góc trên trái */
+.room-grid { display: grid; gap: 14px; }
+.screen .s-head { position: absolute; top: 14px; left: 18px; display: grid; justify-items: start; gap: 6px; }
+.screen .s-head .s-name { position: static; }
+.pill { padding: 3px 10px; border-radius: 99px; font-size: .8rem; font-weight: 800; background: rgb(255 255 255 / .12); color: var(--ink); }
+.pill.on { background: var(--presence); color: #2a1500; }
+.chip.warn { background: rgb(255 93 93 / .25); color: #ffb4a8; }
+.screen .s-time { position: absolute; left: 18px; bottom: 12px; font-size: .85rem; font-weight: 600; color: #c4cad4; }
+.screen .s-empty { position: absolute; left: 18px; right: 18px; bottom: 14px; font-weight: 700; color: #c4cad4; }
+.screen .s-big { font: 700 1.5rem/1.2 var(--f-display); text-shadow: 0 1px 8px rgb(0 0 0 / .5); }
+.screen.on .s-big { color: var(--presence); }
+.actions.two { grid-template-columns: 1fr 1fr; }
+.actions button { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 14px 4px; font-size: .9rem; }
+.dock { margin-top: 18px; }
+.actions button:disabled { opacity: .4; cursor: not-allowed; }
+
+.banner { padding: 12px 16px; border-radius: var(--r-md); background: rgb(255 93 93 / .12); font-weight: 700; }
+
+/* Chữ phụ đủ tương phản, nút xoá đủ to để chạm (44px) */
+.end { color: var(--muted); }
+.del { width: 44px; height: 44px; margin: -4px -6px 0 0; }
+
+/* Máy tính: rộng hơn, phòng xếp 2 cột */
+@media (min-width: 900px) {
+  main, .topbar { max-width: 1080px; }
+  .room-grid { grid-template-columns: 1fr 1fr; }
+}

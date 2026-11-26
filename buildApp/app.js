@@ -113,23 +113,24 @@ function renderHome() {
   const busy = rooms.filter((r) => r.occupied).length;
   const total = rooms.reduce((n, r) => n + r.esps.length, 0);
   const on = rooms.reduce((n, r) => n + onlineCount(r), 0);
+  const last = events[0];
+  const issues = rooms.reduce((n, r) => n + r.esps.length - onlineCount(r), 0);
   $app.innerHTML = `
-    <section class="summary" aria-label="Tóm tắt">
-      <div class="hot"><b>${busy}</b><span>phòng có người</span></div>
-      <div><b>${rooms.length}</b><span>phòng</span></div>
-      <div class="ok"><b>${on}/${total}</b><span>thiết bị hoạt động</span></div>
+    <section class="status-hero">
+      <p class="sh-big ${busy ? "on" : ""}">${busy ? `${busy} phòng đang có người` : "Không có ai trong nhà"}</p>
+      <p class="sh-sub">${rooms.length} phòng, ${on}/${total} thiết bị hoạt động${issues ? `, <span class="warn">${issues} thiết bị cần xử lý</span>` : ""}</p>
     </section>
 
-    <section class="panel">
-      <button class="panel-head" id="ev-all"><span>Sự kiện gần đây</span>${I.chev}</button>
-      ${eventList(events.slice(0, 3))}
-    </section>
+    ${last ? `<button class="event-row" id="ev-all">
+      <span class="er-icon">${I.bell}</span>
+      <span class="er-text"><b class="${/có người/i.test(last.text) ? "hot" : ""}">${esc(last.text)}</b><small>${esc(roomName(last.room))}, lúc ${esc(last.time)}</small></span>
+      <span class="er-more">Tất cả ${I.chev}</span>
+    </button>` : ""}
 
-    ${rooms.map(roomCard).join("")}
-    ${rooms.length ? `<p class="end">Hết danh sách</p>` : ""}
+    <div class="room-grid">${rooms.map(roomCard).join("")}</div>
     <button class="add" id="add-room">${I.plus} Thêm phòng</button>
   `;
-  document.getElementById("ev-all").onclick = () => go("#/events");
+  document.getElementById("ev-all")?.addEventListener("click", () => go("#/events"));
   document.getElementById("add-room").onclick = addRoom;
   $app.querySelectorAll("[data-go]").forEach((b) => b.onclick = () => go(b.dataset.go));
 }
@@ -141,24 +142,30 @@ function eventList(list) {
       <span class="ev-text"><span class="${/có người/i.test(e.text) ? "hot" : ""}">${esc(e.text)}</span><br><span class="ev-room">${esc(roomName(e.room))}</span></span></li>`).join("")}</ul>`;
 }
 
-// Thẻ phòng lớn: "màn hình sóng" + 3 nút thao tác bên dưới
+// Thẻ phòng lớn: tên + trạng thái nổi bật, chip thiết bị (báo lỗi nếu có), 2 nút thao tác
 function roomCard(r) {
   const last = events.find((e) => e.room === r.id);
+  const bad = r.esps.length - onlineCount(r);
+  const empty = !r.esps.length;
   return `
   <article class="room-card">
     <button class="screen ${r.occupied ? "on" : ""}" data-go="#/room/${r.id}" aria-label="Mở ${esc(r.name)}">
-      ${wave(r.occupied, 320, 70, 40)}
-      <span class="s-name">${esc(r.name)}</span>
+      ${wave(r.occupied && !empty, 320, 70, 40)}
+      <span class="s-head">
+        <span class="s-name">${esc(r.name)}</span>
+        <span class="pill ${empty ? "" : r.occupied ? "on" : ""}">${empty ? "Chưa theo dõi" : r.occupied ? "Có người" : "Trống"}</span>
+      </span>
       <span class="s-icons">
-        <span class="chip">${I.wifi} ${onlineCount(r)}/${r.esps.length}</span>
+        ${empty ? "" : `<span class="chip">${I.wifi} ${r.esps.length} thiết bị</span>`}
+        ${bad ? `<span class="chip warn">${bad} lỗi</span>` : ""}
         ${r.training ? `<span class="chip">Đang train</span>` : ""}
       </span>
-      <span class="s-event">${r.occupied ? "Có người" : "Không có người"}${last ? ` · ${esc(last.time)} ${esc(last.text)}` : ""}</span>
+      ${empty ? `<span class="s-empty">Thêm thiết bị để bắt đầu theo dõi phòng này</span>`
+        : last ? `<span class="s-time">Cập nhật ${esc(last.time)}</span>` : ""}
     </button>
-    <div class="actions">
-      <button data-go="#/room/${r.id}">${I.devices}Thiết bị</button>
+    <div class="actions two">
       <button data-go="#/add/${r.id}">${I.plus}Thêm thiết bị</button>
-      <button data-go="#/room/${r.id}/train">${I.train}Train</button>
+      <button data-go="#/room/${r.id}/train" ${empty ? "disabled" : ""}>${I.train}Train</button>
     </div>
   </article>`;
 }
@@ -175,14 +182,12 @@ function renderRoom(room) {
   $app.innerHTML = `
     <article class="room-card">
       <div class="screen ${room.occupied ? "on" : ""}">
-        ${wave(room.occupied, 320, 70, 40)}
-        <span class="s-icons"><span class="chip">${I.wifi} ${onlineCount(room)}/${room.esps.length}</span></span>
+        ${wave(room.occupied && room.esps.length > 0, 320, 70, 40)}
+        <span class="s-head"><span class="s-big">${!room.esps.length ? "Chưa theo dõi" : room.occupied ? "Có người" : "Không có người"}</span></span>
+        <span class="s-time">${room.esps.length ? `${onlineCount(room)}/${room.esps.length} thiết bị đang đo` : "Chưa có thiết bị"}</span>
       </div>
     </article>
-    <div class="state-line">
-      <p class="state ${room.occupied ? "on" : ""}">${room.occupied ? "Có người" : "Không có người"}</p>
-      <small>${room.esps.length ? `${onlineCount(room)}/${room.esps.length} thiết bị đang đo` : "Chưa có thiết bị"}</small>
-    </div>
+    ${room.esps.length - onlineCount(room) ? `<p class="banner">${room.esps.length - onlineCount(room)} thiết bị cần xử lý, xem bên dưới.</p>` : ""}
 
     <h2 class="group-title">Thiết bị trong phòng</h2>
     ${room.esps.length ? `<ul class="list">${room.esps.map((e) => `
