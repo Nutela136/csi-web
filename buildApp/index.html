@@ -2,29 +2,41 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#111317">
+  <meta name="color-scheme" content="dark">
   <title>CSI</title>
+  <!-- Font: Unbounded cho tiêu đề, Manrope cho chữ thường (đổi ở đây + trong style.css) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;700&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Thanh trên cùng: nút quay lại (ẩn ở trang chủ) + tiêu đề -->
-  <header class="topbar">
-    <button id="back" class="icon-btn" aria-label="Quay lại" hidden>←</button>
-    <h1 id="title">CSI</h1>
-  </header>
+  <!-- Thanh trên cùng: app.js tự vẽ nội dung tuỳ màn hình -->
+  <header class="topbar" id="topbar"></header>
 
   <!-- Nội dung từng màn hình được vẽ vào đây bởi app.js -->
   <main id="app"></main>
 
-  <!-- Hộp thoại nhập tên (dùng chung cho thêm phòng / thêm ESP) -->
+  <!-- Hộp thoại nhập tên (dùng cho thêm phòng) -->
   <dialog id="dlg">
     <form method="dialog">
       <h2 id="dlg-title">Thêm</h2>
-      <input id="dlg-input" required autocomplete="off">
+      <input id="dlg-input" required autocomplete="off" enterkeyhint="done">
       <div class="row">
-        <button value="cancel" formnovalidate>Huỷ</button>
-        <button value="ok" class="primary">Thêm</button>
+        <button value="cancel" class="ghost" formnovalidate>Huỷ</button>
+        <button value="ok" class="solid">Thêm</button>
       </div>
+    </form>
+  </dialog>
+
+  <!-- Menu nút + ở trang chủ -->
+  <dialog id="menu" class="sheet">
+    <form method="dialog">
+      <button value="device" class="menu-item"><span class="mi-icon">⌁</span><span><b>Thêm thiết bị</b><small>Quét mã QR hoặc nhập mã trên thiết bị</small></span></button>
+      <button value="room" class="menu-item"><span class="mi-icon">⌂</span><span><b>Thêm phòng</b><small>Tạo phòng mới để đặt cảm biến</small></span></button>
+      <button value="cancel" class="ghost wide">Đóng</button>
     </form>
   </dialog>
 
