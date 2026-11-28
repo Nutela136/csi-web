@@ -353,3 +353,30 @@ main > *, .room-grid > * { min-width: 0; }
 .solid.danger { background: var(--danger); color: #fff; }
 .cfm-text { color: var(--muted); }
 @media (hover: hover) and (pointer: fine) { .settings .set-row:hover { background: var(--card-2); } }
+
+/* Thông báo: 2 tab Cảm biến / Train */
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: var(--r-md); background: var(--card); }
+.tabs button { min-height: 44px; border: 0; border-radius: var(--r-sm); background: none; color: var(--muted); font-weight: 800; }
+.tabs button[aria-selected="true"] { background: var(--card-2); color: var(--ink); }
+
+/* Lịch sử train xếp lớp */
+.stack { display: grid; gap: 10px; }
+.run { border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
+.run summary { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.run summary::-webkit-details-marker { display: none; }
+.run summary > svg { color: var(--muted); transition: transform .15s var(--ease); }
+.run[open] summary > svg { transform: rotate(90deg); }
+.run-mark { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 50%; font-weight: 800; background: var(--action); color: var(--action-ink); }
+.run.bad .run-mark { background: var(--danger); color: #fff; }
+.run-title { flex: 1; min-width: 0; }
+.run-title b { display: block; }
+.run.ok .run-title b { color: var(--action); }
+.run.bad .run-title b { color: var(--danger); }
+.run-title small { color: var(--muted); }
+.timeline { list-style: none; margin: 0; padding: 0 16px 14px 64px; }
+.timeline li { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; color: var(--muted); font-size: .9rem; }
+.timeline li::before { content: ""; position: absolute; left: -32px; top: 14px; width: 8px; height: 8px; border-radius: 50%; background: var(--empty); }
+.timeline li:not(:last-child)::after { content: ""; position: absolute; left: -29px; top: 24px; bottom: -14px; width: 2px; background: var(--line); }
+.timeline li.done { color: var(--ink); } .timeline li.done::before { background: var(--action); }
+.timeline li.fail { color: var(--ink); } .timeline li.fail::before { background: var(--danger); }
+.timeline time { white-space: nowrap; font-variant-numeric: tabular-nums; }
