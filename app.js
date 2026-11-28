@@ -57,6 +57,12 @@ function when(e) {
   return diff === 0 ? `Hôm nay ${t}` : diff === 1 ? `Hôm qua ${t}` : `${p(d.getDate())}/${p(d.getMonth() + 1)} ${t}`;
 }
 
+// Thông báo chia 2 loại: cảm biến/phòng (events) và train (room.trainLog).
+// Sự kiện train cũ còn lưu trong events thì ẩn đi để không lặp.
+const sensorEvents = () => events.filter((e) => !/train/i.test(e.text));
+// Ngày giờ từ mốc thời gian (ms) -> "Hôm nay 07:39"
+const whenTs = (ts, fallback = "") => ts ? when({ ts }) : fallback;
+
 const $app = document.getElementById("app");
 const $top = document.getElementById("topbar");
 
@@ -118,7 +124,7 @@ function router() {
   const [, page, id, sub] = location.hash.split("/");
   const room = rooms.find((r) => r.id === id);
   if (page === "room" && room) sub === "train" ? renderTrain(room) : renderRoom(room);
-  else if (page === "events") renderEvents();
+  else if (page === "events") renderEvents(id === "train" ? "train" : "sensor");
   else if (page === "add") renderAdd(id);
   else renderHome();
   window.scrollTo(0, 0);
@@ -131,7 +137,7 @@ function renderHome() {
   const busy = rooms.filter((r) => r.occupied).length;
   const total = rooms.reduce((n, r) => n + r.esps.length, 0);
   const on = rooms.reduce((n, r) => n + onlineCount(r), 0);
-  const last = events[0];
+  const last = sensorEvents()[0];
   const issues = rooms.reduce((n, r) => n + r.esps.length - onlineCount(r), 0);
   $app.innerHTML = `
     <section class="status-hero">
@@ -162,7 +168,7 @@ function eventList(list) {
 
 // Thẻ phòng lớn: tên + trạng thái nổi bật, chip thiết bị (báo lỗi nếu có), 2 nút thao tác
 function roomCard(r) {
-  const last = events.find((e) => e.room === r.id);
+  const last = sensorEvents().find((e) => e.room === r.id);
   const bad = r.esps.length - onlineCount(r);
   const empty = !r.esps.length;
   return `
@@ -189,9 +195,41 @@ function roomCard(r) {
 }
 
 /* ---------- Tất cả sự kiện ---------- */
-function renderEvents() {
-  topSub("Sự kiện");
-  $app.innerHTML = `<section class="panel"><div style="padding-top:8px">${eventList(events)}</div></section>`;
+function renderEvents(tab) {
+  topSub("Thông báo");
+  const runs = rooms.flatMap((r) => (r.trainLog || []).map((t) => ({ ...t, room: r.id })))
+    .sort((x, y) => (y.endTs || 0) - (x.endTs || 0));
+  $app.innerHTML = `
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="${tab === "sensor"}" data-go="#/events">Cảm biến</button>
+      <button role="tab" aria-selected="${tab === "train"}" data-go="#/events/train">Train</button>
+    </div>
+    ${tab === "sensor"
+      ? `<section class="panel"><div style="padding-top:8px">${eventList(sensorEvents())}</div></section>`
+      : trainStack(runs, true)}`;
+  $app.querySelectorAll("[data-go]").forEach((b) => b.onclick = () => go(b.dataset.go));
+}
+
+/* Lịch sử train dạng xếp lớp: dòng cha = kết quả, bấm vào mở các mốc thời gian bên trong.
+   showRoom = true khi gộp nhiều phòng (trang Thông báo) */
+function trainStack(runs, showRoom = false) {
+  if (!runs.length) return `<div class="empty-note">Chưa train lần nào.</div>`;
+  return `<div class="stack">${runs.map((t, i) => `
+    <details class="run ${t.ok ? "ok" : "bad"}" ${i === 0 ? "open" : ""}>
+      <summary>
+        <span class="run-mark">${t.ok ? "✓" : "!"}</span>
+        <span class="run-title"><b>${t.ok ? "Train thành công" : "Train không thành công"}</b>
+          <small>${showRoom ? `${esc(roomName(t.room))}, ` : ""}${esc(whenTs(t.endTs, t.end))}</small></span>
+        ${I.chev}
+      </summary>
+      <ol class="timeline">
+        <li><span>Bắt đầu</span><time>${esc(whenTs(t.startTs, t.start))}</time></li>
+        ${t.ok
+          ? `<li><span>Dừng lấy dữ liệu</span><time>${esc(whenTs(t.endTs, t.end))}</time></li>
+             <li class="done"><span>Xong, ${esc(t.note)}</span><time>${esc(whenTs(t.endTs, t.end))}</time></li>`
+          : `<li class="fail"><span>Dừng giữa chừng: ${esc(t.note)}</span><time>${esc(whenTs(t.endTs, t.end))}</time></li>`}
+      </ol>
+    </details>`).join("")}</div>`;
 }
 
 /* ---------- Chi tiết phòng ---------- */
@@ -512,7 +550,7 @@ async function stepConnect(password) {
    - Chưa chạy: chỉ có nút "Bắt đầu train" + khung "Lịch sử train" bên dưới
    - Đang chạy: hiện vòng tiến độ, ẩn nút bắt đầu (tránh bấm chồng lên lần đang chạy)
    - Xong: báo Thành công / Không thành công và ghi vào lịch sử
-   Lịch sử lưu ở room.trainLog: { start, end, ok, note } */
+   Lịch sử lưu ở room.trainLog: { start, end, startTs, endTs, ok, note } */
 const stamp = () => {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())} ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
@@ -521,8 +559,7 @@ const trainTimers = {}; // mỗi phòng 1 bộ đếm, chạy tiếp cả khi r�
 
 function startTrain(room) {
   room.training = true; room.progress = 0; room.lastResult = null;
-  room.trainStart = stamp();
-  logEvent(room.id, "Bắt đầu train");
+  room.trainStart = stamp(); room.trainStartTs = Date.now();
   tickTrain(room);
 }
 // Giả lập: mỗi giây +5%. Sau này thay bằng gọi API train thật trên Pi.
@@ -542,8 +579,8 @@ function finishTrain(room, ok) {
   room.training = false;
   const note = ok ? `${onlineCount(room)} thiết bị đã lấy dữ liệu` : "Không có thiết bị nào hoạt động";
   room.lastResult = { ok, note };
-  (room.trainLog ||= []).unshift({ start: room.trainStart, end: stamp(), ok, note });
-  logEvent(room.id, ok ? "Train thành công" : "Train không thành công");
+  (room.trainLog ||= []).unshift({ start: room.trainStart, end: stamp(), startTs: room.trainStartTs, endTs: Date.now(), ok, note });
+  save();
 }
 
 function renderTrain(room) {
@@ -570,13 +607,8 @@ function renderTrain(room) {
     <button class="solid wide" id="start" ${canStart ? "" : "disabled"}>Bắt đầu train</button>
     ${canStart ? "" : `<p class="step-sub">Cần ít nhất 1 thiết bị đang hoạt động trong phòng.</p>`}`}
 
-    <section class="panel">
-      <h2 class="panel-head as-title">Lịch sử train</h2>
-      ${log.length ? `<ul class="events">${log.map((t) => `
-        <li><span class="ev-text"><span class="${t.ok ? "ok" : "bad"}">${t.ok ? "Thành công" : "Không thành công"}</span><br>
-          <span class="ev-room">${esc(t.start)} đến ${esc(t.end)}, ${esc(t.note)}</span></span></li>`).join("")}</ul>`
-        : `<p class="step-sub" style="padding:0 20px 18px">Chưa train lần nào.</p>`}
-    </section>
+    <h2 class="group-title">Lịch sử train</h2>
+    ${trainStack(log)}
   `;
   document.getElementById("start")?.addEventListener("click", () => { startTrain(room); renderTrain(room); });
 }
